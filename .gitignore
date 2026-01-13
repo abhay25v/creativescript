@@ -1,0 +1,26 @@
+﻿# dependencies
+node_modules
+
+# build output
+.next
+out
+
+# env files
+.env
+.env.*
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# misc
+.DS_Store
+
+# macOS archive metadata
+__MACOSX/
+**/._*
+
+# vercel
+.vercel
