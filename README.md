@@ -1,135 +1,71 @@
-# Frontend Developer Assessment - Chat Application
+# Assessment Notes (Refactor + Fixes)
 
-## Overview
+## Key issues identified
 
-This is a real-time chat dashboard built with Next.js, TypeScript, and Tailwind CSS. The application connects healthcare professionals (Students and Preceptors) and provides features for real-time messaging, activity history, and performance analytics.
+### Code quality / architecture
+- `app/dashboard/page.tsx` was a large monolithic component (~1400 LOC) mixing UI, API calls, socket wiring, formatting utilities, and mock features.
+- Repeated custom UI primitives (`Input`, `Button`) with inconsistent styling and inline styles.
+- Auth logic used `window.location.href` in several places, which bypasses Next.js routing and can create unnecessary full reloads.
 
-**The app works, but it has several issues that need to be identified and fixed.**
+### Performance
+- Multiple `useEffect` hooks without dependency arrays caused render loops (re-fetching users continuously).
+- Search called the API but ignored the response (no UI update).
+- History rendered 1500 rows directly (unnecessary work) and didn’t scale well.
 
-## Your Task
+### Real-time / WebSocket correctness
+- Socket `login` event did not follow the required payload shape.
+- Message sending emitted the `message` event twice.
+- Incoming messages were normalized inconsistently (`msg.content` vs `msg.message`) and timestamp handling was incorrect.
 
-Review the codebase and identify issues related to:
+## Changes implemented
 
-1. **Code Quality & Best Practices**
-2. **Performance Optimization**
-3. **UI/UX Consistency**
-4. **Architecture & Organization**
+### Design system + typography
+- Updated global theme variables to match the palette from the prompt.
+- Switched fonts to **Inter** (body) and **Plus Jakarta Sans** (headings).
 
-You are expected to:
+Files:
+- [app/globals.css](app/globals.css)
+- [app/layout.tsx](app/layout.tsx)
 
-- Identify problems in the code
-- Refactor and fix issues you find
-- **Freedom to Update UI/UX**: You are encouraged to improve the design, layout, and user experience as you see fit to make it feel more premium and professional.
-- Explain why your changes improve the codebase
+### Shared utilities & UI primitives
+- Added small shared helpers:
+  - `apiClient` + `withAuth()`
+  - `chatAuth` helpers (get/set/clear)
+  - `cn()` utility for class merging
+  - `useDebouncedValue()` hook
+- Added reusable `Button` and `Input` components.
 
-## Design Theme
+Files:
+- [app/lib/apiClient.ts](app/lib/apiClient.ts)
+- [app/lib/chatAuth.ts](app/lib/chatAuth.ts)
+- [app/lib/constants.ts](app/lib/constants.ts)
+- [app/lib/cn.ts](app/lib/cn.ts)
+- [app/lib/useDebouncedValue.ts](app/lib/useDebouncedValue.ts)
+- [app/components/ui/button.tsx](app/components/ui/button.tsx)
+- [app/components/ui/input.tsx](app/components/ui/input.tsx)
 
-The application should follow a consistent design system. Use these guidelines when refactoring the UI:
+### Auth flow
+- Fixed an effect that ran every render.
+- Uses Next router navigation (`router.replace/push`) instead of `window.location.href`.
 
-### Color Palette
+Files:
+- [app/auth/page.tsx](app/auth/page.tsx)
+- [app/page.tsx](app/page.tsx)
 
-| Color          | Hex Code  | Usage                           |
-| -------------- | --------- | ------------------------------- |
-| Primary        | `#6366F1` | Buttons, links, active states   |
-| Primary Dark   | `#4F46E5` | Hover states, accents           |
-| Background     | `#F8FAFC` | Page background                 |
-| Surface        | `#FFFFFF` | Cards, modals, panels           |
-| Text Primary   | `#1E293B` | Headings, important text        |
-| Text Secondary | `#64748B` | Body text, descriptions         |
-| Border         | `#E2E8F0` | Dividers, input borders         |
-| Success        | `#10B981` | Success messages, online status |
-| Error          | `#EF4444` | Error messages, alerts          |
+### Dashboard fixes (socket, effects, history)
+- Fixed user fetching render loop by adding proper effect dependencies.
+- Search now updates the UI using debounced server-side filtering.
+- Socket `login` now follows the spec: `socket.emit('login', { userId: String(...) })`.
+- Message sending emits once and follows outgoing spec: `{ message, receiverId, senderId, mediaType: 'text' }`.
+- Added socket cleanup on unmount.
+- Added a lightweight virtualized History list to handle large datasets without extra dependencies.
 
-### Typography
+Files:
+- [app/dashboard/page.tsx](app/dashboard/page.tsx)
+- [app/dashboard/components/HistoryTable.tsx](app/dashboard/components/HistoryTable.tsx)
 
-Use **two font families** for visual hierarchy:
-
-| Font                  | Usage                               |
-| --------------------- | ----------------------------------- |
-| **Inter**             | Body text, labels, descriptions     |
-| **Plus Jakarta Sans** | Headings (h1-h6), navigation titles |
-
-## Getting Started
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-```
-
-## Test Credentials
-
-Use the following accounts to test the application:
-
-| Role          | Email                  | Password   |
-| ------------- | ---------------------- | ---------- |
-| **Student**   | `student@yopmail.com`  | `Test@123` |
-| **Preceptor** | `karishma@yopmail.com` | `Test@123` |
-
-## API Documentation
-
-The application uses the following APIs:
-
-### Authentication
-
-- `POST /api/v1/auth/login` - Login with email/password
-
-### Connections
-
-- `GET /api/v1/relation?type=accepted&page=1&limit=50` - Get connected users
-- Use query param `name` for search feature
-
-### Chat
-
-- `GET /api/v1/chats/:userId` - Get chat messages with a user
-- **WebSocket connection** for real-time messages.
-
-#### WebSocket Events (Specification)
-
-To ensure real-time features work correctly, your implementation must adhere to the following event names and payload structures:
-
-- **Events**:
-  - `login`: Must be emitted immediately after connection. Payload: `{ userId }` (The `userId` as a string).
-  - `message`: Used for both sending and receiving messages.
-  - **Payload (Outgoing)**: `{ message, receiverId, senderId, mediaType: 'text' }`
-  - **Payload (Incoming)**: `{ message, senderId, timestamp }`
-
-### Analytics, History and Settings
-
-- Note: The **History**, **Settings** and **Analytics** tabs currently use mock data. This includes the **Edit Profile** feature, which should be functional (handling form state/UI logic) but does not require integration with a real backend API. **You are NOT required to remove or replace this mock data with real API calls.**
-- However, you should still treat these as production-ready features. Focus on refactoring their implementation for better architecture, modularity, and performance (e.g., handling large datasets in History).
-- Candidates should investigate the current "monolithic" implementation and propose more robust, maintainable patterns.
-
-### Base URL
-
-```
-https://backend.cauhec.org/api/v1
-```
-
-## Evaluation Criteria
-
-You will be evaluated on your ability to:
-
-1. **Identify Issues** - Can you spot problems in the code?
-2. **Propose Solutions** - Do your solutions follow best practices?
-3. **Code Quality** - Is your refactored code clean and maintainable?
-4. **Performance Awareness** - Do you understand performance implications?
-5. **UI/UX Sense** - Can you identify and fix design inconsistencies?
-
-## Submission
-
-Once complete, please package your work as a **ZIP file** and send it to **tech@creativescript.org**.
-
-Your submission should include:
-
-1. Your refactored code (excluding `node_modules` and `.next` folders)
-2. A brief document explaining the issues you identified and how you resolved them
-3. Any additional improvements you would suggest given more time
-
-## Time Limit
-
-You have **4 hours** to complete this assessment. Focus on the most critical issues first.
-
-Good luck! 🚀
+## If I had more time
+- Split `app/dashboard/page.tsx` further into feature modules (Chat / History / Settings / Analytics) + dedicated hooks (`useConnections`, `useMessages`, `useSocket`).
+- Improve message filtering so incoming messages route to the correct conversation and add unread badges.
+- Replace remaining inline styles with consistent Tailwind-based components.
+- Add basic error UI states and retry for API failures.
